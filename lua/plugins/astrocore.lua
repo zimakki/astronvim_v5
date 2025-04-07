@@ -61,6 +61,11 @@ return {
         -- navigate buffer tabs
         ["]b"] = { function() require("astrocore.buffer").nav(vim.v.count1) end, desc = "Next buffer" },
         ["[b"] = { function() require("astrocore.buffer").nav(-vim.v.count1) end, desc = "Previous buffer" },
+        ["<Leader>mm"] = { ":wa<cr>:TestNearest<cr>", desc = "🧪 🐞 debug nearest test" },
+        ["<Leader>ma"] = { ":wa<cr>:TestSuit<cr>", desc = "🧪 run all tests" },
+        ["<Leader>ml"] = { ":wa<cr>:TestLast<cr>", desc = "🧪 run all tests" },
+        ["<Leader>mc"] = { ":wa<cr>:!mix format && mix credo<cr>:TestSuit<cr>", desc = "🧪 format, credo, test" },
+        ["<Leader>mf"] = { ":wa<cr>:TestFile<cr>", desc = "🧪 run all tests in file" },
 
         -- mappings seen under group name "Buffer"
         ["<Leader>bd"] = {
