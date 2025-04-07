@@ -66,6 +66,8 @@ return {
         ["<Leader>ml"] = { ":wa<cr>:TestLast<cr>", desc = "🧪 run all tests" },
         ["<Leader>mc"] = { ":wa<cr>:!mix format && mix credo<cr>:TestSuit<cr>", desc = "🧪 format, credo, test" },
         ["<Leader>mf"] = { ":wa<cr>:TestFile<cr>", desc = "🧪 run all tests in file" },
+        ["H"] = { ":bprevious<cr>", desc = "👈📜 Previous buffer" },
+        ["L"] = { ":bnext<cr>", desc = "👉📜 Next buffer" },
 
         -- mappings seen under group name "Buffer"
         ["<Leader>bd"] = {
