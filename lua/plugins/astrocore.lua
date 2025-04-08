@@ -68,6 +68,7 @@ return {
         ["<Leader>mf"] = { ":wa<cr>:TestFile<cr>", desc = "🧪 run all tests in file" },
         ["H"] = { ":bprevious<cr>", desc = "👈📜 Previous buffer" },
         ["L"] = { ":bnext<cr>", desc = "👉📜 Next buffer" },
+        ["<leader> "] = { function() require("snacks").picker.buffers() end, desc = "📜📜📜📜 Buffers" },
 
         -- mappings seen under group name "Buffer"
         ["<Leader>bd"] = {
