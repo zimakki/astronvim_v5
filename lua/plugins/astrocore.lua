@@ -69,6 +69,7 @@ return {
         ["H"] = { ":bprevious<cr>", desc = "👈📜 Previous buffer" },
         ["L"] = { ":bnext<cr>", desc = "👉📜 Next buffer" },
         ["<leader> "] = { function() require("snacks").picker.buffers() end, desc = "📜📜📜📜 Buffers" },
+        ["gf"] = { "gF", desc = "📁 Better gf! you want to go to the line number if it can find it" },
 
         -- mappings seen under group name "Buffer"
         ["<Leader>bd"] = {
