@@ -63,13 +63,14 @@ return {
         ["[b"] = { function() require("astrocore.buffer").nav(-vim.v.count1) end, desc = "Previous buffer" },
         ["<Leader>mm"] = { ":wa<cr>:TestNearest<cr>", desc = "🧪 🐞 debug nearest test" },
         ["<Leader>ma"] = { ":wa<cr>:TestSuit<cr>", desc = "🧪 run all tests" },
-        ["<Leader>ml"] = { ":wa<cr>:TestLast<cr>", desc = "🧪 run all tests" },
+        ["<Leader>ml"] = { ":wa<cr>:TestLast<cr>", desc = "🧪 run last tests" },
         ["<Leader>mc"] = { ":wa<cr>:!mix format && mix credo<cr>:TestSuit<cr>", desc = "🧪 format, credo, test" },
         ["<Leader>mf"] = { ":wa<cr>:TestFile<cr>", desc = "🧪 run all tests in file" },
         ["H"] = { ":bprevious<cr>", desc = "👈📜 Previous buffer" },
         ["L"] = { ":bnext<cr>", desc = "👉📜 Next buffer" },
         ["<leader> "] = { function() require("snacks").picker.buffers() end, desc = "📜📜📜📜 Buffers" },
         ["gf"] = { "gF", desc = "📁 Better gf! you want to go to the line number if it can find it" },
+        ["<Leader>fj"] = { function() Snacks.picker.jumps() end, desc = "🦘 Snacks Jumps Picker" },
 
         -- mappings seen under group name "Buffer"
         ["<Leader>bd"] = {
