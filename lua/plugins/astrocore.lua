@@ -64,7 +64,17 @@ return {
         ["<Leader>mm"] = { ":wa<cr>:TestNearest<cr>", desc = "🧪 🐞 debug nearest test" },
         ["<Leader>ma"] = { ":wa<cr>:TestSuit<cr>", desc = "🧪 run all tests" },
         ["<Leader>ml"] = { ":wa<cr>:TestLast<cr>", desc = "🧪 run last tests" },
-        ["<Leader>mc"] = { ":wa<cr>:!mix format && mix credo<cr>:TestSuit<cr>", desc = "🧪 format, credo, test" },
+        ["<Leader>mc"] = {
+          function()
+            vim.cmd "wa"
+            local format_output = vim.fn.system "mix format"
+            local credo_output = vim.fn.system "mix credo"
+            vim.notify("mix format:\n" .. format_output)
+            vim.notify("mix credo:\n" .. credo_output)
+            vim.cmd "TestSuit"
+          end,
+          desc = "🧪 format, credo, test",
+        },
         ["<Leader>mf"] = { ":wa<cr>:TestFile<cr>", desc = "🧪 run all tests in file" },
         ["H"] = { ":bprevious<cr>", desc = "👈📜 Previous buffer" },
         ["L"] = { ":bnext<cr>", desc = "👉📜 Next buffer" },
