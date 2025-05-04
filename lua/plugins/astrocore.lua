@@ -56,6 +56,19 @@ return {
     mappings = {
       -- first key is the mode
       n = {
+        ["<Leader>mw"] = {
+          function()
+            local is_zoomed = vim.t.zoomed
+            if is_zoomed then
+              vim.cmd "tabclose"
+              vim.t.zoomed = false
+            else
+              vim.cmd "tab split"
+              vim.t.zoomed = true
+            end
+          end,
+          desc = "Toggle window maximize",
+        },
         -- second key is the lefthand side of the map
 
         -- navigate buffer tabs
