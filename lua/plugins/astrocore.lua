@@ -74,9 +74,12 @@ return {
         -- navigate buffer tabs
         ["]b"] = { function() require("astrocore.buffer").nav(vim.v.count1) end, desc = "Next buffer" },
         ["[b"] = { function() require("astrocore.buffer").nav(-vim.v.count1) end, desc = "Previous buffer" },
-        ["<Leader>mm"] = { ":wa<cr>:TestNearest<cr>", desc = "🧪 🐞 debug nearest test" },
+        ["<Leader>mm"] = { ":wa<cr>:Neotest run<cr>", desc = "🧪 run tests" },
+        ["<Leader>mo"] = { ":wa<cr>:Neotest output<cr>", desc = "🧪 test output" },
+        ["<Leader>ms"] = { ":wa<cr>:Neotest summary<cr>", desc = "🧪 open tests summary" },
+        ["<Leader>md"] = { ":wa<cr>:TestNearest<cr>", desc = "🧪 🐞 debug nearest test" },
         ["<Leader>ma"] = { ":wa<cr>:TestSuit<cr>", desc = "🧪 run all tests" },
-        ["<Leader>ml"] = { ":wa<cr>:TestLast<cr>", desc = "🧪 run last tests" },
+        ["<Leader>ml"] = { ":wa<cr>:Neotest run last<cr>", desc = "🧪 run last tests" },
         ["<Leader>mc"] = {
           function()
             vim.cmd "wa"
