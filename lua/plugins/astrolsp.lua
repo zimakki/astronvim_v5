@@ -38,19 +38,11 @@ return {
     -- enable servers that you already have installed without mason
     servers = {
       -- "pyright"
-      lexical = {},
+      -- Expert LSP is configured in lua/plugins/expert.lua
     },
     -- customize language server configuration options passed to `lspconfig`
     ---@diagnostic disable: missing-fields
     config = {
-      lexical = {
-        cmd = {
-          vim.fn.stdpath "data" .. "/mason/packages/lexical/lexical",
-          "--stdio",
-        },
-        -- filetypes = { "elixir" },
-        -- root_dir = require("lspconfig.util").root_pattern "mix.exs",
-      },
       -- clangd = { capabilities = { offsetEncoding = "utf-8" } },
     },
     -- customize how language servers are attached
