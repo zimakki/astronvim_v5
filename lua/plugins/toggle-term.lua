@@ -9,12 +9,10 @@ return {
       opts.float_opts = vim.tbl_deep_extend("force", opts.float_opts or {}, {
         border = "rounded", -- Specify the desired border style ("single", "double", "shadow", "none", etc.)
 
-        -- Calculate integer width based on 100% of editor width (fraction = 1)
-        -- math.floor ensures it's an integer for the nvim API
-        width = math.floor(vim.o.columns * 1),
-
-        -- Calculate integer height based on 100% of editor height (fraction = 1)
-        height = math.floor(vim.o.lines * 1),
+        -- Use functions so dimensions are recalculated on every resize
+        -- (toggleterm's _resolve_size handles type(size) == "function")
+        width = function() return vim.o.columns end,
+        height = function() return vim.o.lines end,
       })
 
       -- Return the modified options table for lazy.nvim to use
