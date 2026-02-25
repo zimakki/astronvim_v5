@@ -3,12 +3,13 @@ return {
   ft = { "elixir" },
   opts = {},
   config = function(_, opts)
-    local iex = require("iex")
+    local iex = require "iex"
 
     -- Override run BEFORE setup so the BufWritePost autocmd captures
     -- our version. The plugin's default uses `mix run` + Code.eval_file
     -- which doesn't have IEx helpers (h/1, i/1, etc.). This launches a
     -- real `iex -S mix` session that auto-loads .iex.exs natively.
+    ---@diagnostic disable-next-line: duplicate-set-field
     iex.run = function()
       local current_win = vim.api.nvim_get_current_win()
 
@@ -33,7 +34,7 @@ return {
         vim.cmd.vsplit()
       end
 
-      vim.cmd.terminal("iex -S mix")
+      vim.cmd.terminal "iex -S mix"
       vim.api.nvim_buf_set_name(0, "iex:///output")
       vim.wo.statusline = " iex:///output "
 
@@ -44,7 +45,7 @@ return {
     iex.setup(opts)
   end,
   keys = {
-    { "<Leader>mi", "<cmd>IEx<cr>", desc = "Open IEx scratch file" },
-    { "<Leader>mr", "<cmd>IExRun<cr>", desc = "Run IEx scratch file" },
+    { "<Leader>mi", "<cmd>IEx<cr>", desc = "🚀 Open IEx scratch file" },
+    { "<Leader>mr", "<cmd>IExRun<cr>", desc = "🚀 Run IEx scratch file" },
   },
 }
