@@ -11,8 +11,16 @@ return {
     init = function()
       vim.g.mkdp_filetypes = { "markdown" }
       vim.g.mkdp_auto_close = 1
-      vim.g.mkdp_theme = "dark"
+      vim.g.mkdp_theme = "dark" -- light, dark, system
       vim.g.mkdp_markdown_css = vim.fn.expand "~/.config/nvim/css/markdown-wide.css"
+
+      vim.api.nvim_create_user_command("MarkdownThemeToggle", function()
+        local current = vim.g.mkdp_theme
+        vim.g.mkdp_theme = current == "dark" and "light" or "dark"
+        vim.cmd "MarkdownPreviewStop"
+        vim.defer_fn(function() vim.cmd "MarkdownPreview" end, 300)
+        vim.notify("Markdown theme: " .. vim.g.mkdp_theme)
+      end, { desc = "Toggle markdown preview light/dark theme" })
     end,
   },
 }
