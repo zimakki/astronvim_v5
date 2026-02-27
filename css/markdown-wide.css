@@ -42,8 +42,23 @@ body {
   --table-hover: rgba(30, 64, 175, 0.08);
   --table-accent: #1e40af;
 
+  --code-bg: #eae8e1;
+  --code-text: #a8370e;
+  --code-border: #d6d3cc;
+
+  --pre-bg: #f5f3ee;
+  --pre-border: #d6d3cc;
+  --pre-scrollbar-thumb: #c4c0b8;
+  --pre-scrollbar-track: transparent;
+
+  --header-text: #888888;
+  --header-border: #d6d3cc;
+
   --mark-bg: rgba(180, 83, 9, 0.12);
   --mark-text: #b45309;
+
+  --scrollbar-thumb: #c4c0b8;
+  --scrollbar-track: transparent;
 
   --hr: linear-gradient(
     90deg,
@@ -89,8 +104,23 @@ body:has([data-theme="dark"]) {
   --table-hover: rgba(122, 162, 247, 0.1);
   --table-accent: #7aa2f7;
 
+  --code-bg: #24283b;
+  --code-text: #ff9e64;
+  --code-border: #2f334d;
+
+  --pre-bg: #1a1b26;
+  --pre-border: #2f334d;
+  --pre-scrollbar-thumb: #3b4261;
+  --pre-scrollbar-track: transparent;
+
+  --header-text: #565f89;
+  --header-border: #2f334d;
+
   --mark-bg: rgba(240, 198, 116, 0.2);
   --mark-text: #f0c674;
+
+  --scrollbar-thumb: #3b4261;
+  --scrollbar-track: transparent;
 
   --hr: linear-gradient(
     90deg,
@@ -123,11 +153,62 @@ body {
   background-color: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+
+body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+body::-webkit-scrollbar {
+  width: 8px;
+}
+
+body::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
 }
 
 #page-ctn {
   max-width: 1400px;
   padding: 2rem 3rem;
+}
+
+/* ── Page header ─────────────────────────────────────── */
+
+#page-header {
+  margin-bottom: 1.5em;
+  padding-bottom: 0.75em;
+  border-bottom: 1px solid var(--header-border);
+}
+
+#page-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: "Outfit", system-ui, sans-serif;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--header-text);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+#page-header h3 svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  opacity: 0.6;
 }
 
 /* ── Headings ─────────────────────────────────────────── */
@@ -143,6 +224,50 @@ h6 {
   margin-top: 2.5em;
   margin-bottom: 0.8em;
   letter-spacing: -0.02em;
+  position: relative;
+}
+
+/* ── Heading anchors ─────────────────────────────────── */
+
+h1 .anchor,
+h2 .anchor,
+h3 .anchor,
+h4 .anchor,
+h5 .anchor,
+h6 .anchor {
+  position: absolute;
+  left: -1.5em;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  text-decoration: none;
+  line-height: 1;
+}
+
+h1:hover .anchor,
+h2:hover .anchor,
+h3:hover .anchor,
+h4:hover .anchor,
+h5:hover .anchor,
+h6:hover .anchor {
+  opacity: 0.4;
+}
+
+h1 .anchor:hover,
+h2 .anchor:hover,
+h3 .anchor:hover,
+h4 .anchor:hover,
+h5 .anchor:hover,
+h6 .anchor:hover {
+  opacity: 0.8;
+}
+
+.anchor .octicon {
+  width: 16px;
+  height: 16px;
+  fill: var(--text-muted);
+  vertical-align: middle;
 }
 
 h1 {
@@ -187,6 +312,7 @@ h6 {
 
 p {
   margin-bottom: 1.25em;
+  text-wrap: pretty;
 }
 
 strong {
@@ -254,6 +380,62 @@ blockquote p:last-child {
 blockquote blockquote {
   margin-top: 0.75em;
   border-left-color: var(--h4);
+}
+
+/* ── Inline code ─────────────────────────────────────── */
+
+code {
+  font-family:
+    "SF Mono",
+    "Cascadia Code",
+    "Fira Code",
+    ui-monospace,
+    monospace;
+  font-size: 0.88em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--code-text);
+  border: 1px solid var(--code-border);
+  word-break: break-word;
+}
+
+/* ── Code blocks (fenced) ────────────────────────────── */
+
+pre {
+  margin: 1.5em 0;
+  padding: 1.25em 1.5em;
+  border-radius: 8px;
+  background: var(--pre-bg);
+  border: 1px solid var(--pre-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pre-scrollbar-thumb) var(--pre-scrollbar-track);
+}
+
+pre::-webkit-scrollbar {
+  height: 6px;
+}
+
+pre::-webkit-scrollbar-track {
+  background: var(--pre-scrollbar-track);
+}
+
+pre::-webkit-scrollbar-thumb {
+  background: var(--pre-scrollbar-thumb);
+  border-radius: 3px;
+}
+
+pre code {
+  font-size: 0.9em;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--text);
+  word-break: normal;
+  white-space: pre;
+  line-height: 1.6;
 }
 
 /* ── Tables ───────────────────────────────────────────── */
