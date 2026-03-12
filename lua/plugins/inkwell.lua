@@ -22,17 +22,11 @@ end
 
 return {
   "AstroNvim/astrocore",
+  ft = { "markdown" },
   opts = {
     commands = {
       InkwellPreview = {
-        function()
-          if vim.bo.filetype ~= "markdown" then
-            vim.notify("Inkwell: not a markdown file", vim.log.levels.WARN)
-            return
-          end
-
-          run_inkwell { "preview", vim.fn.expand "%:p", "--theme", vim.g.inkwell_theme or "dark" }
-        end,
+        function() run_inkwell { "preview", vim.fn.expand "%:p", "--theme", vim.g.inkwell_theme or "dark" } end,
         desc = "Open current markdown file in inkwell preview",
       },
       InkwellStop = {
@@ -42,6 +36,20 @@ return {
       InkwellStatus = {
         function() run_inkwell { "status" } end,
         desc = "Show inkwell daemon status",
+      },
+    },
+    autocmds = {
+      inkwell_markdown = {
+        {
+          event = "FileType",
+          pattern = "markdown",
+          callback = function(args)
+            vim.keymap.set("n", "<leader>mp", "<cmd>InkwellPreview<cr>", {
+              buffer = args.buf,
+              desc = "Inkwell preview",
+            })
+          end,
+        },
       },
     },
   },
