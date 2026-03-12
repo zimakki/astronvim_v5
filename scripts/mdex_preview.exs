@@ -3,7 +3,8 @@ Mix.install([
   {:bandit, "~> 1.10"},
   {:plug, "~> 1.19"},
   {:websock_adapter, "~> 0.5"},
-  {:file_system, "~> 1.0"}
+  {:file_system, "~> 1.0"},
+  {:jason, "~> 1.4"}
 ])
 
 # ── WebSocket handler ──────────────────────────────────────
@@ -30,6 +31,24 @@ defmodule MdexPreview.WsHandler do
 
   @impl true
   def terminate(_reason, _state), do: :ok
+end
+
+# ── File history ───────────────────────────────────────────
+
+defmodule MdexPreview.History do
+  use Agent
+
+  def start_link(initial_path) do
+    Agent.start_link(fn -> [initial_path] end, name: __MODULE__)
+  end
+
+  def push(path) do
+    Agent.update(__MODULE__, fn history ->
+      [path | Enum.reject(history, &(&1 == path))] |> Enum.take(20)
+    end)
+  end
+
+  def list, do: Agent.get(__MODULE__, & &1)
 end
 
 # ── Markdown rendering ─────────────────────────────────────
@@ -93,6 +112,7 @@ defmodule MdexPreview.Watcher do
     FileSystem.subscribe(watcher)
 
     :persistent_term.put(:mdex_file, new_path)
+    MdexPreview.History.push(new_path)
 
     # Push initial render of new file
     html = new_path |> File.read!() |> MdexPreview.Render.render()
@@ -162,6 +182,26 @@ defmodule MdexPreview.Router do
     end
   end
 
+  get "/files" do
+    current = :persistent_term.get(:mdex_file)
+    dir = Path.dirname(current)
+
+    siblings =
+      dir
+      |> File.ls!()
+      |> Enum.filter(&String.ends_with?(&1, ".md"))
+      |> Enum.map(&Path.join(dir, &1))
+      |> Enum.sort()
+
+    recent = MdexPreview.History.list()
+
+    json = Jason.encode!(%{current: current, recent: recent, siblings: siblings, dir: dir})
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, json)
+  end
+
   get "/css/markdown-wide.css" do
     css_dir = :persistent_term.get(:mdex_css_dir)
     css_path = Path.join(css_dir, "markdown-wide.css")
@@ -191,19 +231,101 @@ defmodule MdexPreview.Router do
       <title>#{filename}</title>
       <link rel="stylesheet" href="/css/markdown-wide.css">
       <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+      <style>
+        #page-header { cursor: pointer; user-select: none; position: relative; }
+        #page-header h3::after { content: ' ▾'; font-size: 0.7em; opacity: 0.5; }
+
+        #file-picker {
+          position: fixed; top: 0; right: -380px; width: 360px; height: 100vh;
+          background: var(--bg-surface); border-left: 1px solid var(--border);
+          box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+          transition: right 0.25s ease; z-index: 1000;
+          display: flex; flex-direction: column;
+          font-family: "Outfit", system-ui, sans-serif;
+        }
+        #file-picker.open { right: 0; }
+
+        #file-picker-header {
+          padding: 1em 1.2em; border-bottom: 1px solid var(--border);
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        #file-picker-header h4 {
+          margin: 0; font-size: 0.85em; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.05em;
+          color: var(--text-muted);
+          font-family: "Bricolage Grotesque", system-ui, sans-serif;
+        }
+        #file-picker-close {
+          background: none; border: none; color: var(--text-muted);
+          font-size: 1.4em; cursor: pointer; padding: 0 0.2em;
+          line-height: 1;
+        }
+        #file-picker-close:hover { color: var(--text); }
+
+        #file-picker-body { overflow-y: auto; flex: 1; padding: 0.5em 0; }
+
+        .file-section {
+          padding: 0.6em 1.2em 0.2em;
+          font-size: 0.75em; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.06em;
+          color: var(--text-muted);
+          font-family: "Bricolage Grotesque", system-ui, sans-serif;
+        }
+
+        .file-item {
+          display: block; padding: 0.5em 1.2em;
+          color: var(--text-secondary); text-decoration: none;
+          font-size: 0.9em; cursor: pointer;
+          border-left: 3px solid transparent;
+          transition: background 0.1s, border-color 0.1s;
+        }
+        .file-item:hover {
+          background: var(--bg-hover); color: var(--text);
+          border-left-color: var(--link);
+        }
+        .file-item.active {
+          color: var(--link); font-weight: 500;
+          border-left-color: var(--link);
+          background: var(--bg-hover);
+        }
+        .file-item .file-dir {
+          font-size: 0.8em; color: var(--text-muted);
+          display: block; margin-top: 0.15em;
+        }
+
+        #file-picker-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          z-index: 999; display: none;
+        }
+        #file-picker-overlay.open { display: block; }
+      </style>
     </head>
     <body>
       <div data-theme="#{theme}">
         <div id="page-header">
-          <h3>#{filename}</h3>
+          <h3 id="header-title">#{filename}</h3>
         </div>
         <div id="page-ctn">
           #{content}
         </div>
       </div>
+
+      <div id="file-picker-overlay"></div>
+      <div id="file-picker">
+        <div id="file-picker-header">
+          <h4>Files</h4>
+          <button id="file-picker-close">&times;</button>
+        </div>
+        <div id="file-picker-body"></div>
+      </div>
+
       <script>
         (function() {
           var ctn = document.getElementById('page-ctn');
+          var picker = document.getElementById('file-picker');
+          var pickerBody = document.getElementById('file-picker-body');
+          var overlay = document.getElementById('file-picker-overlay');
+          var headerTitle = document.getElementById('header-title');
           var ws;
 
           mermaid.initialize({ startOnLoad: false, theme: '#{theme}' === 'dark' ? 'dark' : 'default' });
@@ -211,12 +333,87 @@ defmodule MdexPreview.Router do
           function renderMermaid() {
             var blocks = ctn.querySelectorAll('pre.mermaid');
             if (blocks.length > 0) {
-              // mermaid.run() requires elements that haven't been processed yet.
-              // Reset data-processed so re-renders work on live reload.
               blocks.forEach(function(el) { el.removeAttribute('data-processed'); });
               mermaid.run({ nodes: blocks });
             }
           }
+
+          // ── File picker ──────────────────────────────
+
+          function closePicker() {
+            picker.classList.remove('open');
+            overlay.classList.remove('open');
+          }
+
+          function openPicker() {
+            picker.classList.add('open');
+            overlay.classList.add('open');
+            loadFiles();
+          }
+
+          function switchFile(path) {
+            fetch('/switch?' + encodeURIComponent(path))
+              .then(function(r) {
+                if (r.ok) {
+                  headerTitle.textContent = path.split('/').pop();
+                  document.title = path.split('/').pop();
+                  closePicker();
+                }
+              });
+          }
+
+          function loadFiles() {
+            fetch('/files').then(function(r) { return r.json(); }).then(function(data) {
+              var html = '';
+              var seen = {};
+
+              // Recent files
+              if (data.recent.length > 0) {
+                html += '<div class="file-section">Recent</div>';
+                data.recent.forEach(function(f) {
+                  seen[f] = true;
+                  var name = f.split('/').pop();
+                  var dir = f.substring(0, f.length - name.length - 1);
+                  var cls = f === data.current ? 'file-item active' : 'file-item';
+                  html += '<a class="' + cls + '" data-path="' + f + '">'
+                    + name + '<span class="file-dir">' + dir + '</span></a>';
+                });
+              }
+
+              // Sibling files (exclude already shown)
+              var siblings = data.siblings.filter(function(f) { return !seen[f]; });
+              if (siblings.length > 0) {
+                html += '<div class="file-section">' + data.dir.split('/').pop() + '/</div>';
+                siblings.forEach(function(f) {
+                  var name = f.split('/').pop();
+                  html += '<a class="file-item" data-path="' + f + '">' + name + '</a>';
+                });
+              }
+
+              pickerBody.innerHTML = html;
+            });
+          }
+
+          document.getElementById('page-header').addEventListener('click', function(e) {
+            if (picker.classList.contains('open')) closePicker();
+            else openPicker();
+          });
+
+          overlay.addEventListener('click', closePicker);
+          document.getElementById('file-picker-close').addEventListener('click', closePicker);
+
+          pickerBody.addEventListener('click', function(e) {
+            var item = e.target.closest('.file-item');
+            if (item && !item.classList.contains('active')) {
+              switchFile(item.dataset.path);
+            }
+          });
+
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closePicker();
+          });
+
+          // ── WebSocket ────────────────────────────────
 
           function connect() {
             ws = new WebSocket('ws://' + location.host + '/ws');
@@ -228,7 +425,6 @@ defmodule MdexPreview.Router do
             ws.onclose = function() {
               setTimeout(connect, 1000);
             };
-            // Keep connection alive
             ws.onopen = function() {
               setInterval(function() {
                 if (ws.readyState === 1) ws.send('ping');
@@ -284,6 +480,7 @@ css_dir = Keyword.get(opts, :css_dir, Path.join(Path.dirname(__ENV__.file), "../
 :persistent_term.put(:mdex_css_dir, css_dir)
 
 {:ok, _} = Registry.start_link(keys: :duplicate, name: MdexPreview.Registry)
+{:ok, _} = MdexPreview.History.start_link(file_path)
 {:ok, _} = MdexPreview.Watcher.start_link(%{path: file_path})
 {:ok, bandit} = Bandit.start_link(plug: MdexPreview.Router, port: port)
 
