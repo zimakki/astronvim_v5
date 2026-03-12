@@ -77,11 +77,7 @@ defmodule MdexPreview.Render do
     # mdex passes raw HTML through with unsafe_: true, so the divs survive rendering.
     md =
       Regex.replace(~r/```mermaid\n(.*?)```/s, markdown, fn _, content ->
-        escaped =
-          content
-          |> String.replace("&", "&amp;")
-          |> String.replace("<", "&lt;")
-          |> String.replace(">", "&gt;")
+        escaped = Plug.HTML.html_escape(content)
 
         "<pre class=\"mermaid\">#{escaped}</pre>"
       end)
@@ -165,10 +161,10 @@ defmodule MdexPreview.Search do
     dir = Path.dirname(current)
     recent = MdexPreview.History.list()
 
+    existing_recent = Enum.filter(recent, &File.exists?/1)
+
     recent_entries =
-      recent
-      |> Enum.filter(&File.exists?/1)
-      |> Enum.map(fn path ->
+      Enum.map(existing_recent, fn path ->
         %{
           path: path,
           filename: Path.basename(path),
@@ -178,7 +174,7 @@ defmodule MdexPreview.Search do
         }
       end)
 
-    recent_paths = MapSet.new(recent, & &1)
+    recent_paths = MapSet.new(existing_recent)
 
     sibling_entries =
       dir
@@ -243,12 +239,19 @@ defmodule MdexPreview.Watcher do
 
   @impl true
   def handle_call({:switch_file, new_path}, _from, state) do
-    # Stop old watcher and start a new one for the new file's directory
-    if state.watcher, do: GenServer.stop(state.watcher)
-
     new_dir = Path.dirname(new_path)
-    {:ok, watcher} = FileSystem.start_link(dirs: [new_dir])
-    FileSystem.subscribe(watcher)
+    old_dir = Path.dirname(state.path)
+
+    # Only restart the filesystem watcher if the directory changed
+    watcher =
+      if new_dir != old_dir do
+        if state.watcher, do: GenServer.stop(state.watcher)
+        {:ok, w} = FileSystem.start_link(dirs: [new_dir])
+        FileSystem.subscribe(w)
+        w
+      else
+        state.watcher
+      end
 
     :persistent_term.put(:mdex_file, new_path)
     MdexPreview.History.push(new_path)
@@ -272,7 +275,7 @@ defmodule MdexPreview.Watcher do
 
   def handle_info(_msg, state), do: {:noreply, state}
 
-  defp broadcast(html) do
+  def broadcast(html) do
     Registry.dispatch(MdexPreview.Registry, :ws_clients, fn entries ->
       for {pid, _} <- entries, do: send(pid, {:reload, html})
     end)
@@ -335,10 +338,7 @@ defmodule MdexPreview.Router do
     # Re-render current file with new syntax theme and broadcast
     file_path = :persistent_term.get(:mdex_file)
     html = file_path |> File.read!() |> MdexPreview.Render.render()
-
-    Registry.dispatch(MdexPreview.Registry, :ws_clients, fn entries ->
-      for {pid, _} <- entries, do: send(pid, {:reload, html})
-    end)
+    MdexPreview.Watcher.broadcast(html)
 
     conn
     |> put_resp_content_type("application/json")
@@ -377,14 +377,9 @@ defmodule MdexPreview.Router do
 
       true ->
         # Validate path is in allowed set (recent or sibling)
-        allowed =
-          MdexPreview.History.list() ++
-            (Path.dirname(:persistent_term.get(:mdex_file))
-             |> File.ls!()
-             |> Enum.filter(&String.ends_with?(&1, ".md"))
-             |> Enum.map(&Path.join(Path.dirname(:persistent_term.get(:mdex_file)), &1)))
+        allowed = MdexPreview.Search.list_files() |> Enum.map(& &1.path) |> MapSet.new()
 
-        if path in allowed do
+        if MapSet.member?(allowed, path) do
           html = path |> File.read!() |> MdexPreview.Render.render()
 
           conn
@@ -416,11 +411,7 @@ defmodule MdexPreview.Router do
   end
 
   defp html_page(content, filename, theme) do
-    safe_filename = filename
-      |> String.replace("&", "&amp;")
-      |> String.replace("<", "&lt;")
-      |> String.replace(">", "&gt;")
-      |> String.replace("\"", "&quot;")
+    safe_filename = Plug.HTML.html_escape(filename)
 
     """
     <!DOCTYPE html>
@@ -558,6 +549,7 @@ defmodule MdexPreview.Router do
           var currentFiles = [];
           var selectedIndex = 0;
           var searchTimer = null;
+          var escapeDiv = document.createElement('div');
           var previewTimer = null;
           var previewController = null;
 
@@ -653,6 +645,15 @@ defmodule MdexPreview.Router do
             }, 100);
           }
 
+          function updateSelection(oldIdx, newIdx) {
+            var items = pickerListItems.querySelectorAll('.picker-item');
+            if (items[oldIdx]) items[oldIdx].classList.remove('selected');
+            if (items[newIdx]) {
+              items[newIdx].classList.add('selected');
+              items[newIdx].scrollIntoView({ block: 'nearest' });
+            }
+          }
+
           function selectFile() {
             var file = currentFiles[selectedIndex];
             if (!file) return;
@@ -667,9 +668,8 @@ defmodule MdexPreview.Router do
           }
 
           function escapeHtml(str) {
-            var d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
+            escapeDiv.textContent = str;
+            return escapeDiv.innerHTML;
           }
 
           // ── Picker events ─────────────────────────────
@@ -685,15 +685,17 @@ defmodule MdexPreview.Router do
             if (e.key === 'ArrowDown') {
               e.preventDefault();
               if (selectedIndex < currentFiles.length - 1) {
+                var old = selectedIndex;
                 selectedIndex++;
-                renderFileList();
+                updateSelection(old, selectedIndex);
                 loadPreview();
               }
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
               if (selectedIndex > 0) {
+                var old = selectedIndex;
                 selectedIndex--;
-                renderFileList();
+                updateSelection(old, selectedIndex);
                 loadPreview();
               }
             } else if (e.key === 'Enter') {
@@ -709,8 +711,9 @@ defmodule MdexPreview.Router do
               if (idx === selectedIndex) {
                 selectFile();
               } else {
+                var old = selectedIndex;
                 selectedIndex = idx;
-                renderFileList();
+                updateSelection(old, selectedIndex);
                 loadPreview();
               }
             }
