@@ -401,69 +401,85 @@ defmodule MdexPreview.Router do
         #page-header { cursor: pointer; user-select: none; position: relative; }
         #page-header h3::after { content: ' ▾'; font-size: 0.7em; opacity: 0.5; }
 
-        #file-picker {
-          position: fixed; top: 0; right: -380px; width: 360px; height: 100vh;
-          background: var(--bg-surface); border-left: 1px solid var(--border);
-          box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-          transition: right 0.25s ease; z-index: 1000;
-          display: flex; flex-direction: column;
-          font-family: "Outfit", system-ui, sans-serif;
-        }
-        #file-picker.open { right: 0; }
-
-        #file-picker-header {
-          padding: 1em 1.2em; border-bottom: 1px solid var(--border);
-          display: flex; justify-content: space-between; align-items: center;
-        }
-        #file-picker-header h4 {
-          margin: 0; font-size: 0.85em; font-weight: 600;
-          text-transform: uppercase; letter-spacing: 0.05em;
-          color: var(--text-muted);
-          font-family: "Bricolage Grotesque", system-ui, sans-serif;
-        }
-        #file-picker-close {
-          background: none; border: none; color: var(--text-muted);
-          font-size: 1.4em; cursor: pointer; padding: 0 0.2em;
-          line-height: 1;
-        }
-        #file-picker-close:hover { color: var(--text); }
-
-        #file-picker-body { overflow-y: auto; flex: 1; padding: 0.5em 0; }
-
-        .file-section {
-          padding: 0.6em 1.2em 0.2em;
-          font-size: 0.75em; font-weight: 600;
-          text-transform: uppercase; letter-spacing: 0.06em;
-          color: var(--text-muted);
-          font-family: "Bricolage Grotesque", system-ui, sans-serif;
-        }
-
-        .file-item {
-          display: block; padding: 0.5em 1.2em;
-          color: var(--text-secondary); text-decoration: none;
-          font-size: 0.9em; cursor: pointer;
-          border-left: 3px solid transparent;
-          transition: background 0.1s, border-color 0.1s;
-        }
-        .file-item:hover {
-          background: var(--bg-hover); color: var(--text);
-          border-left-color: var(--link);
-        }
-        .file-item.active {
-          color: var(--link); font-weight: 500;
-          border-left-color: var(--link);
-          background: var(--bg-hover);
-        }
-        .file-item .file-dir {
-          font-size: 0.8em; color: var(--text-muted);
-          display: block; margin-top: 0.15em;
-        }
-
-        #file-picker-overlay {
+        /* ── Picker overlay ── */
+        #picker-overlay {
           position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-          z-index: 999; display: none;
+          background: rgba(0,0,0,0.6); z-index: 1000;
+          display: none; align-items: center; justify-content: center;
         }
-        #file-picker-overlay.open { display: block; }
+        #picker-overlay.open { display: flex; }
+
+        #picker {
+          width: 90vw; height: 85vh; max-width: 1400px;
+          background: #16161e; border-radius: 8px;
+          border: 1px solid #2f334d;
+          display: flex; flex-direction: column;
+          font-family: 'SF Mono', monospace; font-size: 13px;
+          color: #c0caf5; overflow: hidden;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        #picker-search {
+          padding: 12px 16px; border-bottom: 1px solid #2f334d;
+          display: flex; align-items: center; gap: 8px;
+        }
+        #picker-search-icon { color: #565f89; }
+        #picker-search input {
+          flex: 1; background: none; border: none; outline: none;
+          color: #7aa2f7; font-size: 14px; font-family: inherit;
+        }
+        #picker-search input::placeholder { color: #565f89; }
+        #picker-search .hint { color: #565f89; font-size: 11px; }
+
+        #picker-body {
+          display: flex; flex: 1; min-height: 0;
+        }
+
+        #picker-list {
+          width: 35%; border-right: 1px solid #2f334d;
+          overflow-y: auto; display: flex; flex-direction: column;
+        }
+
+        .picker-section {
+          padding: 8px 12px 4px; font-size: 10px;
+          text-transform: uppercase; letter-spacing: 0.08em;
+          color: #565f89; font-family: system-ui;
+        }
+
+        .picker-item {
+          padding: 6px 12px; cursor: pointer;
+          border-left: 3px solid transparent;
+        }
+        .picker-item:hover { background: rgba(122,162,247,0.06); }
+        .picker-item.selected {
+          background: rgba(122,162,247,0.12);
+          border-left-color: #7aa2f7;
+        }
+        .picker-item-title {
+          color: #c0caf5; font-size: 13px; font-weight: 500;
+          font-family: system-ui;
+        }
+        .picker-item.selected .picker-item-title { color: #c0caf5; }
+        .picker-item:not(.selected) .picker-item-title { color: #a9b1d6; }
+        .picker-item-file {
+          color: #565f89; font-size: 11px; margin-top: 2px;
+        }
+
+        #picker-status {
+          margin-top: auto; padding: 8px 12px;
+          border-top: 1px solid #2f334d;
+          font-size: 11px; color: #565f89; font-family: system-ui;
+        }
+
+        #picker-preview {
+          width: 65%; overflow-y: auto; padding: 24px 32px;
+          font-family: 'Outfit', system-ui, sans-serif;
+        }
+        #picker-preview .preview-unavailable {
+          color: #565f89; font-style: italic;
+          display: flex; align-items: center; justify-content: center;
+          height: 100%;
+        }
       </style>
     </head>
     <body>
@@ -476,23 +492,40 @@ defmodule MdexPreview.Router do
         </div>
       </div>
 
-      <div id="file-picker-overlay"></div>
-      <div id="file-picker">
-        <div id="file-picker-header">
-          <h4>Files</h4>
-          <button id="file-picker-close">&times;</button>
+      <div id="picker-overlay">
+        <div id="picker">
+          <div id="picker-search">
+            <span id="picker-search-icon">&#9906;</span>
+            <input type="text" id="picker-input" placeholder="Search files and titles..." autocomplete="off" />
+            <span class="hint">ESC to close</span>
+          </div>
+          <div id="picker-body">
+            <div id="picker-list">
+              <div id="picker-list-items"></div>
+              <div id="picker-status"></div>
+            </div>
+            <div id="picker-preview">
+              <div class="preview-unavailable">Select a file to preview</div>
+            </div>
+          </div>
         </div>
-        <div id="file-picker-body"></div>
       </div>
 
       <script>
         (function() {
           var ctn = document.getElementById('page-ctn');
-          var picker = document.getElementById('file-picker');
-          var pickerBody = document.getElementById('file-picker-body');
-          var overlay = document.getElementById('file-picker-overlay');
           var headerTitle = document.getElementById('header-title');
-          var ws;
+          var pickerOverlay = document.getElementById('picker-overlay');
+          var pickerInput = document.getElementById('picker-input');
+          var pickerListItems = document.getElementById('picker-list-items');
+          var pickerStatus = document.getElementById('picker-status');
+          var pickerPreview = document.getElementById('picker-preview');
+          var ws, pingInterval;
+          var currentFiles = [];
+          var selectedIndex = 0;
+          var searchTimer = null;
+          var previewTimer = null;
+          var previewController = null;
 
           mermaid.initialize({ startOnLoad: false, theme: '#{theme}' === 'dark' ? 'dark' : 'default' });
 
@@ -504,82 +537,188 @@ defmodule MdexPreview.Router do
             }
           }
 
-          // ── File picker ──────────────────────────────
-
-          function closePicker() {
-            picker.classList.remove('open');
-            overlay.classList.remove('open');
-          }
+          // ── Picker ────────────────────────────────────
 
           function openPicker() {
-            picker.classList.add('open');
-            overlay.classList.add('open');
-            loadFiles();
+            pickerOverlay.classList.add('open');
+            pickerInput.value = '';
+            pickerInput.focus();
+            selectedIndex = 0;
+            loadSearch('');
           }
 
-          function switchFile(path) {
-            fetch('/switch?' + encodeURIComponent(path))
+          function closePicker() {
+            pickerOverlay.classList.remove('open');
+            pickerInput.blur();
+            currentFiles = [];
+            pickerListItems.innerHTML = '';
+            pickerPreview.innerHTML = '<div class="preview-unavailable">Select a file to preview</div>';
+          }
+
+          function loadSearch(query) {
+            if (previewController) { previewController.abort(); previewController = null; }
+            fetch('/search?q=' + encodeURIComponent(query))
+              .then(function(r) { return r.json(); })
+              .then(function(files) {
+                currentFiles = files;
+                selectedIndex = 0;
+                renderFileList();
+                loadPreview();
+              });
+          }
+
+          function renderFileList() {
+            var html = '';
+            var currentSection = null;
+            currentFiles.forEach(function(f, i) {
+              if (f.section !== currentSection) {
+                currentSection = f.section;
+                var label = f.section === 'recent' ? 'Recent' : (f.path.split('/').slice(-2, -1)[0] + '/');
+                html += '<div class="picker-section">' + label + '</div>';
+              }
+              var cls = i === selectedIndex ? 'picker-item selected' : 'picker-item';
+              var title = f.title || f.filename;
+              html += '<div class="' + cls + '" data-index="' + i + '">'
+                + '<div class="picker-item-title">' + escapeHtml(title) + '</div>'
+                + '<div class="picker-item-file">' + escapeHtml(f.filename) + '</div>'
+                + '</div>';
+            });
+            pickerListItems.innerHTML = html;
+            pickerStatus.textContent = currentFiles.length + ' files \u00b7 \u2191\u2193 navigate \u00b7 \u21b5 open';
+
+            // Scroll selected into view
+            var sel = pickerListItems.querySelector('.selected');
+            if (sel) sel.scrollIntoView({ block: 'nearest' });
+          }
+
+          function loadPreview() {
+            if (previewTimer) clearTimeout(previewTimer);
+            if (!currentFiles.length) {
+              pickerPreview.innerHTML = '<div class="preview-unavailable">No files found</div>';
+              return;
+            }
+            previewTimer = setTimeout(function() {
+              var file = currentFiles[selectedIndex];
+              if (!file) return;
+              if (previewController) previewController.abort();
+              previewController = new AbortController();
+              fetch('/preview?path=' + encodeURIComponent(file.path), { signal: previewController.signal })
+                .then(function(r) {
+                  if (!r.ok) throw new Error('Preview failed');
+                  return r.text();
+                })
+                .then(function(html) {
+                  pickerPreview.innerHTML = html;
+                })
+                .catch(function(e) {
+                  if (e.name !== 'AbortError') {
+                    pickerPreview.innerHTML = '<div class="preview-unavailable">Preview unavailable</div>';
+                  }
+                });
+            }, 100);
+          }
+
+          function selectFile() {
+            var file = currentFiles[selectedIndex];
+            if (!file) return;
+            fetch('/switch?path=' + encodeURIComponent(file.path))
               .then(function(r) {
                 if (r.ok) {
-                  headerTitle.textContent = path.split('/').pop();
-                  document.title = path.split('/').pop();
+                  headerTitle.textContent = file.filename;
+                  document.title = file.filename;
                   closePicker();
                 }
               });
           }
 
-          function loadFiles() {
-            fetch('/files').then(function(r) { return r.json(); }).then(function(data) {
-              var html = '';
-              var seen = {};
-
-              // Recent files
-              if (data.recent.length > 0) {
-                html += '<div class="file-section">Recent</div>';
-                data.recent.forEach(function(f) {
-                  seen[f] = true;
-                  var name = f.split('/').pop();
-                  var dir = f.substring(0, f.length - name.length - 1);
-                  var cls = f === data.current ? 'file-item active' : 'file-item';
-                  html += '<a class="' + cls + '" data-path="' + f + '">'
-                    + name + '<span class="file-dir">' + dir + '</span></a>';
-                });
-              }
-
-              // Sibling files (exclude already shown)
-              var siblings = data.siblings.filter(function(f) { return !seen[f]; });
-              if (siblings.length > 0) {
-                html += '<div class="file-section">' + data.dir.split('/').pop() + '/</div>';
-                siblings.forEach(function(f) {
-                  var name = f.split('/').pop();
-                  html += '<a class="file-item" data-path="' + f + '">' + name + '</a>';
-                });
-              }
-
-              pickerBody.innerHTML = html;
-            });
+          function escapeHtml(str) {
+            var d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
           }
 
-          document.getElementById('page-header').addEventListener('click', function(e) {
-            if (picker.classList.contains('open')) closePicker();
-            else openPicker();
+          // ── Picker events ─────────────────────────────
+
+          pickerInput.addEventListener('input', function() {
+            if (searchTimer) clearTimeout(searchTimer);
+            searchTimer = setTimeout(function() {
+              loadSearch(pickerInput.value);
+            }, 150);
           });
 
-          overlay.addEventListener('click', closePicker);
-          document.getElementById('file-picker-close').addEventListener('click', closePicker);
+          pickerInput.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              if (selectedIndex < currentFiles.length - 1) {
+                selectedIndex++;
+                renderFileList();
+                loadPreview();
+              }
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              if (selectedIndex > 0) {
+                selectedIndex--;
+                renderFileList();
+                loadPreview();
+              }
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              selectFile();
+            }
+          });
 
-          pickerBody.addEventListener('click', function(e) {
-            var item = e.target.closest('.file-item');
-            if (item && !item.classList.contains('active')) {
-              switchFile(item.dataset.path);
+          pickerListItems.addEventListener('click', function(e) {
+            var item = e.target.closest('.picker-item');
+            if (item) {
+              var idx = parseInt(item.dataset.index, 10);
+              if (idx === selectedIndex) {
+                selectFile();
+              } else {
+                selectedIndex = idx;
+                renderFileList();
+                loadPreview();
+              }
+            }
+          });
+
+          pickerOverlay.addEventListener('click', function(e) {
+            if (e.target === pickerOverlay) closePicker();
+          });
+
+          // ── Global keyboard ───────────────────────────
+
+          document.getElementById('page-header').addEventListener('click', function() {
+            if (pickerOverlay.classList.contains('open')) {
+              pickerInput.focus();
+            } else {
+              openPicker();
             }
           });
 
           document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') closePicker();
+            if (e.key === 'Escape' && pickerOverlay.classList.contains('open')) {
+              closePicker();
+              return;
+            }
+            if (e.ctrlKey && e.key === 'p') {
+              e.preventDefault();
+              if (pickerOverlay.classList.contains('open')) {
+                pickerInput.focus();
+              } else {
+                openPicker();
+              }
+              return;
+            }
+            if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+              var el = document.querySelector('[data-theme]');
+              var isDark = el.dataset.theme === 'dark';
+              el.dataset.theme = isDark ? 'light' : 'dark';
+              mermaid.initialize({ startOnLoad: false, theme: isDark ? 'default' : 'dark' });
+              renderMermaid();
+            }
           });
 
-          // ── WebSocket ────────────────────────────────
+          // ── WebSocket ─────────────────────────────────
 
           function connect() {
             ws = new WebSocket('ws://' + location.host + '/ws');
@@ -589,26 +728,18 @@ defmodule MdexPreview.Router do
               renderMermaid();
             };
             ws.onclose = function() {
+              if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
               setTimeout(connect, 1000);
             };
             ws.onopen = function() {
-              setInterval(function() {
+              if (pingInterval) clearInterval(pingInterval);
+              pingInterval = setInterval(function() {
                 if (ws.readyState === 1) ws.send('ping');
               }, 30000);
             };
           }
           connect();
           renderMermaid();
-
-          document.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-              var el = document.querySelector('[data-theme]');
-              var isDark = el.dataset.theme === 'dark';
-              el.dataset.theme = isDark ? 'light' : 'dark';
-              mermaid.initialize({ startOnLoad: false, theme: isDark ? 'default' : 'dark' });
-              renderMermaid();
-            }
-          });
         })();
       </script>
     </body>
