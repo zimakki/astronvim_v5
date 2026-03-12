@@ -73,5 +73,18 @@ return {
         desc = "Stop Elixir live markdown preview server",
       },
     },
+    autocmds = {
+      mdex_preview_cleanup = {
+        {
+          event = "VimLeavePre",
+          callback = function()
+            if vim.g.mdex_preview_job then
+              vim.fn.jobstop(vim.g.mdex_preview_job)
+              vim.g.mdex_preview_job = nil
+            end
+          end,
+        },
+      },
+    },
   },
 }

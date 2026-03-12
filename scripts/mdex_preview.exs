@@ -54,7 +54,7 @@ end
 # ── Markdown rendering ─────────────────────────────────────
 
 defmodule MdexPreview.Render do
-  @mdex_opts [
+  @base_opts [
     extension: [
       strikethrough: true,
       table: true,
@@ -66,6 +66,13 @@ defmodule MdexPreview.Render do
   ]
 
   def render(markdown) do
+    theme = :persistent_term.get(:mdex_theme)
+    syntax_theme = if theme == "light", do: "onelight", else: "onedark"
+
+    opts = Keyword.put(@base_opts, :syntax_highlight,
+      formatter: {:html_inline, [theme: syntax_theme]}
+    )
+
     # Replace mermaid fenced blocks with raw HTML divs before mdex processes them.
     # mdex passes raw HTML through with unsafe_: true, so the divs survive rendering.
     md =
@@ -79,7 +86,7 @@ defmodule MdexPreview.Render do
         "<pre class=\"mermaid\">#{escaped}</pre>"
       end)
 
-    MDEx.to_html!(md, @mdex_opts)
+    MDEx.to_html!(md, opts)
   end
 end
 
@@ -320,6 +327,24 @@ defmodule MdexPreview.Router do
     end
   end
 
+  get "/toggle-theme" do
+    current = :persistent_term.get(:mdex_theme)
+    new_theme = if current == "dark", do: "light", else: "dark"
+    :persistent_term.put(:mdex_theme, new_theme)
+
+    # Re-render current file with new syntax theme and broadcast
+    file_path = :persistent_term.get(:mdex_file)
+    html = file_path |> File.read!() |> MdexPreview.Render.render()
+
+    Registry.dispatch(MdexPreview.Registry, :ws_clients, fn entries ->
+      for {pid, _} <- entries, do: send(pid, {:reload, html})
+    end)
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Jason.encode!(%{theme: new_theme}))
+  end
+
   get "/search" do
     conn = Plug.Conn.fetch_query_params(conn)
     query = conn.query_params["q"] || ""
@@ -420,64 +445,64 @@ defmodule MdexPreview.Router do
 
         #picker {
           width: 90vw; height: 85vh; max-width: 1400px;
-          background: #16161e; border-radius: 8px;
-          border: 1px solid #2f334d;
+          background: var(--bg); border-radius: 8px;
+          border: 1px solid var(--border);
           display: flex; flex-direction: column;
           font-family: 'SF Mono', monospace; font-size: 13px;
-          color: #c0caf5; overflow: hidden;
+          color: var(--text); overflow: hidden;
           box-shadow: 0 20px 60px rgba(0,0,0,0.5);
         }
 
         #picker-search {
-          padding: 12px 16px; border-bottom: 1px solid #2f334d;
+          padding: 12px 16px; border-bottom: 1px solid var(--border);
           display: flex; align-items: center; gap: 8px;
         }
-        #picker-search-icon { color: #565f89; }
+        #picker-search-icon { color: var(--text-muted); }
         #picker-search input {
           flex: 1; background: none; border: none; outline: none;
-          color: #7aa2f7; font-size: 14px; font-family: inherit;
+          color: var(--h2); font-size: 14px; font-family: inherit;
         }
-        #picker-search input::placeholder { color: #565f89; }
-        #picker-search .hint { color: #565f89; font-size: 11px; }
+        #picker-search input::placeholder { color: var(--text-muted); }
+        #picker-search .hint { color: var(--text-muted); font-size: 11px; }
 
         #picker-body {
           display: flex; flex: 1; min-height: 0;
         }
 
         #picker-list {
-          width: 35%; border-right: 1px solid #2f334d;
+          width: 35%; border-right: 1px solid var(--border);
           overflow-y: auto; display: flex; flex-direction: column;
         }
 
         .picker-section {
           padding: 8px 12px 4px; font-size: 10px;
           text-transform: uppercase; letter-spacing: 0.08em;
-          color: #565f89; font-family: system-ui;
+          color: var(--text-muted); font-family: system-ui;
         }
 
         .picker-item {
           padding: 6px 12px; cursor: pointer;
           border-left: 3px solid transparent;
         }
-        .picker-item:hover { background: rgba(122,162,247,0.06); }
+        .picker-item:hover { background: var(--bg-hover); }
         .picker-item.selected {
-          background: rgba(122,162,247,0.12);
-          border-left-color: #7aa2f7;
+          background: var(--bg-surface);
+          border-left-color: var(--h2);
         }
         .picker-item-title {
-          color: #c0caf5; font-size: 13px; font-weight: 500;
+          color: var(--text); font-size: 13px; font-weight: 500;
           font-family: system-ui;
         }
-        .picker-item.selected .picker-item-title { color: #c0caf5; }
-        .picker-item:not(.selected) .picker-item-title { color: #a9b1d6; }
+        .picker-item.selected .picker-item-title { color: var(--text); }
+        .picker-item:not(.selected) .picker-item-title { color: var(--text-secondary); }
         .picker-item-file {
-          color: #565f89; font-size: 11px; margin-top: 2px;
+          color: var(--text-muted); font-size: 11px; margin-top: 2px;
         }
 
         #picker-status {
           margin-top: auto; padding: 8px 12px;
-          border-top: 1px solid #2f334d;
-          font-size: 11px; color: #565f89; font-family: system-ui;
+          border-top: 1px solid var(--border);
+          font-size: 11px; color: var(--text-muted); font-family: system-ui;
         }
 
         #picker-preview {
@@ -485,7 +510,7 @@ defmodule MdexPreview.Router do
           font-family: 'Outfit', system-ui, sans-serif;
         }
         #picker-preview .preview-unavailable {
-          color: #565f89; font-style: italic;
+          color: var(--text-muted); font-style: italic;
           display: flex; align-items: center; justify-content: center;
           height: 100%;
         }
@@ -720,11 +745,12 @@ defmodule MdexPreview.Router do
               return;
             }
             if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-              var el = document.querySelector('[data-theme]');
-              var isDark = el.dataset.theme === 'dark';
-              el.dataset.theme = isDark ? 'light' : 'dark';
-              mermaid.initialize({ startOnLoad: false, theme: isDark ? 'default' : 'dark' });
-              renderMermaid();
+              fetch('/toggle-theme').then(function(r) { return r.json(); }).then(function(data) {
+                var el = document.querySelector('[data-theme]');
+                el.dataset.theme = data.theme;
+                mermaid.initialize({ startOnLoad: false, theme: data.theme === 'dark' ? 'dark' : 'default' });
+                renderMermaid();
+              });
             }
           });
 
