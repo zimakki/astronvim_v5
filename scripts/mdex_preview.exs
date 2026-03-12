@@ -18,6 +18,7 @@ defmodule MdexPreview.WsHandler do
   end
 
   @impl true
+  def handle_in({text, _opts}, state) when text == "ping", do: {:push, {:text, "pong"}, state}
   def handle_in(_message, state), do: {:ok, state}
 
   @impl true
@@ -70,12 +71,34 @@ defmodule MdexPreview.Watcher do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
+  def switch_file(path) do
+    GenServer.call(__MODULE__, {:switch_file, Path.expand(path)})
+  end
+
   @impl true
   def init(%{path: path}) do
     dir = Path.dirname(path)
     {:ok, watcher} = FileSystem.start_link(dirs: [dir])
     FileSystem.subscribe(watcher)
     {:ok, %{path: path, watcher: watcher}}
+  end
+
+  @impl true
+  def handle_call({:switch_file, new_path}, _from, state) do
+    # Stop old watcher and start a new one for the new file's directory
+    if state.watcher, do: GenServer.stop(state.watcher)
+
+    new_dir = Path.dirname(new_path)
+    {:ok, watcher} = FileSystem.start_link(dirs: [new_dir])
+    FileSystem.subscribe(watcher)
+
+    :persistent_term.put(:mdex_file, new_path)
+
+    # Push initial render of new file
+    html = new_path |> File.read!() |> MdexPreview.Render.render()
+    broadcast(html)
+
+    {:reply, :ok, %{state | path: new_path, watcher: watcher}}
   end
 
   @impl true
@@ -121,8 +144,22 @@ defmodule MdexPreview.Router do
 
   get "/ws" do
     conn
-    |> WebSockAdapter.upgrade(MdexPreview.WsHandler, [], timeout: 60_000)
+    |> WebSockAdapter.upgrade(MdexPreview.WsHandler, [], timeout: :infinity)
     |> halt()
+  end
+
+  get "/switch" do
+    new_path = conn.query_string |> URI.decode()
+
+    if File.exists?(new_path) do
+      MdexPreview.Watcher.switch_file(new_path)
+
+      conn
+      |> put_resp_content_type("text/plain")
+      |> send_resp(200, "Switched to #{new_path}")
+    else
+      send_resp(conn, 404, "File not found: #{new_path}")
+    end
   end
 
   get "/css/markdown-wide.css" do
@@ -184,11 +221,18 @@ defmodule MdexPreview.Router do
           function connect() {
             ws = new WebSocket('ws://' + location.host + '/ws');
             ws.onmessage = function(e) {
+              if (e.data === 'pong') return;
               ctn.innerHTML = e.data;
               renderMermaid();
             };
             ws.onclose = function() {
               setTimeout(connect, 1000);
+            };
+            // Keep connection alive
+            ws.onopen = function() {
+              setInterval(function() {
+                if (ws.readyState === 1) ws.send('ping');
+              }, 30000);
             };
           }
           connect();
@@ -241,9 +285,16 @@ css_dir = Keyword.get(opts, :css_dir, Path.join(Path.dirname(__ENV__.file), "../
 
 {:ok, _} = Registry.start_link(keys: :duplicate, name: MdexPreview.Registry)
 {:ok, _} = MdexPreview.Watcher.start_link(%{path: file_path})
-{:ok, _} = Bandit.start_link(plug: MdexPreview.Router, port: port)
+{:ok, bandit} = Bandit.start_link(plug: MdexPreview.Router, port: port)
 
 IO.puts("MdexPreview running at http://localhost:#{port} for #{file_path}")
 System.cmd("open", ["http://localhost:#{port}"])
 
-Process.sleep(:infinity)
+# Trap shutdown signals so Bandit releases the port before exit
+Process.flag(:trap_exit, true)
+
+receive do
+  {:EXIT, _, _} ->
+    IO.puts("Shutting down...")
+    Supervisor.stop(bandit)
+end
