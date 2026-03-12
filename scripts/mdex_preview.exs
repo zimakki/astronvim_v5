@@ -335,7 +335,10 @@ defmodule MdexPreview.Router do
 
   get "/preview" do
     conn = Plug.Conn.fetch_query_params(conn)
-    path = conn.query_params["path"]
+    path = case conn.query_params["path"] do
+      nil -> nil
+      p -> Path.expand(p)
+    end
 
     cond do
       is_nil(path) ->
@@ -388,13 +391,19 @@ defmodule MdexPreview.Router do
   end
 
   defp html_page(content, filename, theme) do
+    safe_filename = filename
+      |> String.replace("&", "&amp;")
+      |> String.replace("<", "&lt;")
+      |> String.replace(">", "&gt;")
+      |> String.replace("\"", "&quot;")
+
     """
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>#{filename}</title>
+      <title>#{safe_filename}</title>
       <link rel="stylesheet" href="/css/markdown-wide.css">
       <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
       <style>
@@ -485,7 +494,7 @@ defmodule MdexPreview.Router do
     <body>
       <div data-theme="#{theme}">
         <div id="page-header">
-          <h3 id="header-title">#{filename}</h3>
+          <h3 id="header-title">#{safe_filename}</h3>
         </div>
         <div id="page-ctn">
           #{content}
@@ -564,7 +573,8 @@ defmodule MdexPreview.Router do
                 selectedIndex = 0;
                 renderFileList();
                 loadPreview();
-              });
+              })
+              .catch(function() {});
           }
 
           function renderFileList() {

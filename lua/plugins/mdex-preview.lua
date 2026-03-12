@@ -19,7 +19,7 @@ return {
 
           if vim.g.mdex_preview_job then
             -- Server already running — just switch the file
-            vim.fn.jobstart({ "curl", "-s", "http://localhost:" .. port .. "/switch?path=" .. file })
+            vim.fn.jobstart({ "curl", "-s", "-G", "--data-urlencode", "path=" .. file, "http://localhost:" .. port .. "/switch" })
             vim.notify("MdexPreview: switched to " .. vim.fn.expand "%:t")
           else
             local script = config_dir .. "/scripts/mdex_preview.exs"
