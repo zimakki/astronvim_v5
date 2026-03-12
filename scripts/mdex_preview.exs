@@ -83,6 +83,138 @@ defmodule MdexPreview.Render do
   end
 end
 
+# ── Search & fuzzy matching ───────────────────────────────
+
+defmodule MdexPreview.Search do
+  @moduledoc """
+  Indexes markdown files by filename and H1 title.
+  Provides fuzzy search across both fields.
+  """
+
+  @doc """
+  Extract the first H1 title from a markdown file.
+  Reads up to 50 lines, returns the text of the first `# ...` line, or nil.
+  """
+  def extract_title(path) do
+    path
+    |> File.stream!()
+    |> Stream.take(50)
+    |> Enum.find_value(fn line ->
+      case Regex.run(~r/^#\s+(.+)$/, String.trim_trailing(line)) do
+        [_, title] -> String.trim(title)
+        nil -> nil
+      end
+    end)
+  rescue
+    _ -> nil
+  end
+
+  @doc """
+  Score a candidate string against a query using fuzzy subsequence matching.
+  Returns 0 if the query chars don't all appear in order.
+  Higher scores = better match (consecutive chars, early position).
+  """
+  def fuzzy_score("", _candidate), do: 0
+  def fuzzy_score(_query, nil), do: 0
+  def fuzzy_score(_query, ""), do: 0
+
+  def fuzzy_score(query, candidate) do
+    q_chars = query |> String.downcase() |> String.graphemes()
+    c_chars = candidate |> String.downcase() |> String.graphemes()
+
+    case do_match(q_chars, c_chars, 0, 0, 0, nil, false) do
+      nil -> 0
+      {matched, consec_bonus, first_pos} ->
+        position_bonus = max(0, 2 - first_pos)
+        matched + consec_bonus + position_bonus
+    end
+  end
+
+  # All query chars matched
+  defp do_match([], _c, matched, cb, _idx, fp, _prev),
+    do: {matched, cb, fp || 0}
+
+  # Ran out of candidate chars before matching all query chars
+  defp do_match(_q, [], _m, _cb, _idx, _fp, _prev), do: nil
+
+  # Query char matches candidate char — award consecutive bonus if previous was also a match
+  defp do_match([q | qr], [c | cr], matched, cb, idx, fp, prev) when q == c do
+    new_fp = fp || idx
+    new_cb = if prev, do: cb + 3, else: cb
+    do_match(qr, cr, matched + 1, new_cb, idx + 1, new_fp, true)
+  end
+
+  # No match — advance candidate, reset consecutive flag
+  defp do_match(q, [_c | cr], matched, cb, idx, fp, _prev) do
+    do_match(q, cr, matched, cb, idx + 1, fp, false)
+  end
+
+  @doc """
+  Build the full list of searchable files: recent history + siblings of current file.
+  Deduplicates (recent takes priority). Extracts H1 title from each file.
+  """
+  def list_files do
+    current = :persistent_term.get(:mdex_file)
+    dir = Path.dirname(current)
+    recent = MdexPreview.History.list()
+
+    recent_entries =
+      recent
+      |> Enum.filter(&File.exists?/1)
+      |> Enum.map(fn path ->
+        %{
+          path: path,
+          filename: Path.basename(path),
+          title: extract_title(path),
+          section: :recent,
+          active: path == current
+        }
+      end)
+
+    recent_paths = MapSet.new(recent, & &1)
+
+    sibling_entries =
+      dir
+      |> File.ls!()
+      |> Enum.filter(&String.ends_with?(&1, ".md"))
+      |> Enum.map(&Path.join(dir, &1))
+      |> Enum.reject(&MapSet.member?(recent_paths, &1))
+      |> Enum.sort()
+      |> Enum.map(fn path ->
+        %{
+          path: path,
+          filename: Path.basename(path),
+          title: extract_title(path),
+          section: :sibling,
+          active: path == current
+        }
+      end)
+
+    recent_entries ++ sibling_entries
+  end
+
+  @doc """
+  Search files by query. Empty query returns all files.
+  Non-empty query fuzzy-matches against filename and title, returns ranked results.
+  """
+  def search(""), do: list_files()
+  def search(nil), do: list_files()
+
+  def search(query) do
+    list_files()
+    |> Enum.map(fn entry ->
+      filename_score = fuzzy_score(query, entry.filename)
+      title_score = fuzzy_score(query, entry.title) * 1.2
+      score = max(filename_score, title_score)
+      {entry, score}
+    end)
+    |> Enum.reject(fn {_entry, score} -> score == 0 end)
+    |> Enum.sort_by(fn {_entry, score} -> score end, :desc)
+    |> Enum.take(50)
+    |> Enum.map(fn {entry, _score} -> entry end)
+  end
+end
+
 # ── File watcher ───────────────────────────────────────────
 
 defmodule MdexPreview.Watcher do
@@ -169,37 +301,71 @@ defmodule MdexPreview.Router do
   end
 
   get "/switch" do
-    new_path = conn.query_string |> URI.decode()
+    conn = Plug.Conn.fetch_query_params(conn)
+    new_path = conn.query_params["path"]
 
-    if File.exists?(new_path) do
-      MdexPreview.Watcher.switch_file(new_path)
+    cond do
+      is_nil(new_path) ->
+        send_resp(conn, 400, "Missing path parameter")
 
-      conn
-      |> put_resp_content_type("text/plain")
-      |> send_resp(200, "Switched to #{new_path}")
-    else
-      send_resp(conn, 404, "File not found: #{new_path}")
+      not File.exists?(new_path) ->
+        send_resp(conn, 404, "File not found: #{new_path}")
+
+      true ->
+        MdexPreview.Watcher.switch_file(new_path)
+
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(200, "Switched to #{new_path}")
     end
   end
 
-  get "/files" do
-    current = :persistent_term.get(:mdex_file)
-    dir = Path.dirname(current)
+  get "/search" do
+    conn = Plug.Conn.fetch_query_params(conn)
+    query = conn.query_params["q"] || ""
 
-    siblings =
-      dir
-      |> File.ls!()
-      |> Enum.filter(&String.ends_with?(&1, ".md"))
-      |> Enum.map(&Path.join(dir, &1))
-      |> Enum.sort()
+    results = MdexPreview.Search.search(query)
 
-    recent = MdexPreview.History.list()
-
-    json = Jason.encode!(%{current: current, recent: recent, siblings: siblings, dir: dir})
+    json = Jason.encode!(results)
 
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(200, json)
+  end
+
+  get "/preview" do
+    conn = Plug.Conn.fetch_query_params(conn)
+    path = conn.query_params["path"]
+
+    cond do
+      is_nil(path) ->
+        send_resp(conn, 400, "Missing path parameter")
+
+      not String.ends_with?(path, ".md") ->
+        send_resp(conn, 400, "Path must end with .md")
+
+      not File.exists?(path) ->
+        send_resp(conn, 404, "File not found")
+
+      true ->
+        # Validate path is in allowed set (recent or sibling)
+        allowed =
+          MdexPreview.History.list() ++
+            (Path.dirname(:persistent_term.get(:mdex_file))
+             |> File.ls!()
+             |> Enum.filter(&String.ends_with?(&1, ".md"))
+             |> Enum.map(&Path.join(Path.dirname(:persistent_term.get(:mdex_file)), &1)))
+
+        if path in allowed do
+          html = path |> File.read!() |> MdexPreview.Render.render()
+
+          conn
+          |> put_resp_content_type("text/html")
+          |> send_resp(200, html)
+        else
+          send_resp(conn, 403, "Path not in allowed file set")
+        end
+    end
   end
 
   get "/css/markdown-wide.css" do
