@@ -3,10 +3,10 @@
 local function inkwell_bin()
   if vim.g.inkwell_bin and vim.fn.executable(vim.g.inkwell_bin) == 1 then return vim.g.inkwell_bin end
 
+  if vim.fn.executable "inkwell" == 1 then return "inkwell" end
+
   local local_bin = vim.fn.expand "~/code/zimakki/inkwell/inkwell"
   if vim.fn.executable(local_bin) == 1 then return local_bin end
-
-  if vim.fn.executable "inkwell" == 1 then return "inkwell" end
 end
 
 local function notify_lines(prefix, lines, level)
