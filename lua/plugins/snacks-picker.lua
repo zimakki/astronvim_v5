@@ -6,9 +6,17 @@ return {
     "folke/snacks.nvim",
     opts = {
       picker = {
-        layout = {
-          preset = "default",
-          fullscreen = true,
+        layouts = {
+          default = {
+            fullscreen = true,
+          },
+        },
+        win = {
+          input = {
+            keys = {
+              ["<C-\\>"] = { "layout_cycle", mode = { "i", "n" } },
+            },
+          },
         },
       },
     },
