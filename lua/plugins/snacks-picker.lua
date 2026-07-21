@@ -4,6 +4,14 @@
 return {
   {
     "folke/snacks.nvim",
+    keys = {
+      {
+        "<leader>gy",
+        function() require("snacks").gitbrowse({ what = "permalink" }) end,
+        mode = { "n", "v" },
+        desc = "Open Git permalink",
+      },
+    },
     opts = {
       picker = {
         layouts = {
