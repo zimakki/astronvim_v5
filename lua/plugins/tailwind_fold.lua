@@ -22,6 +22,20 @@ return {
     opts = {
       config = {
         tailwindcss = {
+          -- tailwind-tools calls `client.request(...)` in dot form (lsp.lua:212), which
+          -- Neovim 0.12 deprecates and 0.13 removes. Upstream is stale (last commit
+          -- 2025-05-23), so swap the instance wrapper Neovim installs for an equivalent
+          -- that dispatches both call forms without warning. Remove once upstream
+          -- switches to `client:request`.
+          on_init = function(client)
+            local Client = getmetatable(client)
+            local request = Client and Client.request
+            if not request then return end
+            client.request = function(...)
+              if getmetatable((select(1, ...))) == Client then return request(...) end
+              return request(client, ...)
+            end
+          end,
           init_options = {
             -- Keeping userLanguages to ensure intellisense still works
             userLanguages = {
